@@ -79,7 +79,7 @@ https://github.com/user-attachments/assets/e72c45e3-2cc3-48ce-bb1a-2f0c25e7d602
 
 **Recommended settings for pruned:**
 
-- Enable **`experimental_curve_refit`** (widget on both Apply nodes; right-click → *show optional widgets* if hidden), keep **`strength = 1.0`**, and leave gate/sigma overrides empty — any deviation or unknown checkpoint falls back to backbone-only with a console warning.
+- Enable **`experimental_curve_refit`** (widget on both Apply nodes; right-click → *show optional widgets* if hidden), keep **`strength = 1.0`**, and leave gate/sigma overrides empty. Matching is tiered: the exact fitted files apply silently; byte-different copies of the fitted base or adapter (mirrors, HF downloads) still apply **best-effort with a console warning** — the recipe (strength/gate/sigmas) is always validated; unknown checkpoints or a modified MODEL fall back to backbone-only, with the file hashes in the log for support.
 - Use **`bypass`** as `lora_mode` for the sharpest match to the reference branches.
 - Same sampling as full bases: **Euler** + the node's **SIGMAS** output + the Sol-Attn table above.
 - Console: `[hyperflow] curve refit disabled: <reason>` means the fallback engaged — check strength/overrides/checkpoint.

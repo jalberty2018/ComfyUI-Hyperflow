@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -139,9 +140,11 @@ def test_model_patcher_restores_curve_attributes_and_reinstall():
         assert not hasattr(dm, "time_embedder")
 
 
-@pytest.mark.parametrize("mismatch", [None, "base", "adapter", "strength", "gate", "sigmas", "corrupt",
+@pytest.mark.parametrize("mismatch", [None, "base", "strength", "gate", "sigmas", "corrupt",
                                        "fit_gate", "fit_shift", "fit_sigmas", "fit_shape", "fit_nan"])
 def test_fit_binding_and_recipe_fallback(tmp_path, monkeypatch, caplog, mismatch):
+    # NB "adapter" is intentionally absent: a byte-different adapter on an
+    # exact base now applies best-effort (covered by the test below).
     import hyperflow_h3.curve as curve
     _, (data, meta), _ = fixture()
     checkpoint, adapter = tmp_path / "base.bin", tmp_path / "adapter.bin"
@@ -159,12 +162,62 @@ def test_fit_binding_and_recipe_fallback(tmp_path, monkeypatch, caplog, mismatch
     model = SimpleNamespace(patches={}, object_patches={}, injections={}, cached_patcher_init=(None, (checkpoint,)))
     weights = SimpleNamespace(path=adapter, metadata=SimpleNamespace(gate=.25, sigmas=DEFAULT_SIGMAS_8STEP))
     if mismatch == "base": checkpoint.write_bytes(b"different checkpoint")
-    if mismatch == "adapter": adapter.write_bytes(b"different adapter")
     if mismatch == "corrupt": path.write_bytes(b"broken")
     fit = matching_fit(model, weights, .8 if mismatch == "strength" else 1.,
                        .25 if mismatch == "gate" else None, "1,0" if mismatch == "sigmas" else None)
     assert (fit is None) == (mismatch is not None)
     assert sum("using backbone only" in r.message for r in caplog.records) == int(mismatch is not None)
+
+
+def test_fit_name_match_applies_best_effort_with_warning(tmp_path, monkeypatch, caplog):
+    """Tiered matching: exact base + different adapter bytes (mirror/HF copy)
+    applies best-effort; a same-named repacked base likewise; unknown names
+    keep the backbone-only fallback with hashes in the log. A ModelSampling
+    object patch is the only allowed pre-existing patch."""
+    import hyperflow_h3.curve as curve
+    _, (data, meta), _ = fixture()
+    checkpoint = tmp_path / "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+    adapter = tmp_path / "adapter.bin"
+    checkpoint.write_bytes(b"original checkpoint")
+    adapter.write_bytes(b"specific adapter")
+    meta.update(base_name=checkpoint.name,
+                base_sha256=file_hash(checkpoint), adapter_sha256=file_hash(adapter))
+    save_file(data, tmp_path / "fit.safetensors", metadata=meta)
+    monkeypatch.setattr(curve, "FIT_DIRECTORY", tmp_path)
+    model = SimpleNamespace(patches={}, object_patches={}, injections={},
+                            cached_patcher_init=(None, (checkpoint,)))
+    weights = SimpleNamespace(path=adapter, metadata=SimpleNamespace(gate=.25, sigmas=DEFAULT_SIGMAS_8STEP))
+
+    # Exact base, byte-different adapter (the common HF-mirror case): applies.
+    adapter.write_bytes(b"adapter copy from another source")
+    fit = matching_fit(model, weights, 1., None, None)
+    assert fit is not None
+    assert sum("best-effort" in r.message for r in caplog.records) == 1
+
+    # A ModelSampling node before ApplyHyperFlow is allowed...
+    model.object_patches = {"model_sampling": object()}
+    assert matching_fit(model, weights, 1., None, None) is not None
+    # ...anything else patching the model first is not.
+    model.object_patches = {"diffusion_model.blocks.0.forward": object()}
+    assert matching_fit(model, weights, 1., None, None) is None
+    model.object_patches = {}
+
+    # Same-named repacked base: applies best-effort too.
+    adapter.write_bytes(b"specific adapter")
+    checkpoint.write_bytes(b"repacked mirror with different bytes")
+    assert file_hash(checkpoint) != meta["base_sha256"]
+    fit = matching_fit(model, weights, 1., None, None)
+    assert fit is not None
+    assert sum("best-effort" in r.message for r in caplog.records) == 3
+
+    # An unknown checkpoint name still falls back, with hashes for support.
+    other = tmp_path / "some_other_pruned.safetensors"
+    other.write_bytes(b"unknown checkpoint")
+    model.cached_patcher_init = (None, (other,))
+    fit = matching_fit(model, weights, 1., None, None)
+    assert fit is None
+    assert any("using backbone only" in r.message and file_hash(other) in r.message
+               for r in caplog.records)
 
 
 def test_curve_toggle_defaults_off():

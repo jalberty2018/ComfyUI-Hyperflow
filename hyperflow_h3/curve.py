@@ -43,12 +43,20 @@ def read_fit(path):
 
 
 def matching_fit(model, weights, strength, gate_override, sigmas_override):
-    """Unknown loaders/checkpoints/recipes keep the existing backbone-only path."""
+    """Tiered fit matching.
+
+    Exact base+adapter hash -> silent. Same base but different adapter bytes,
+    or a same-named (mirror/repack) base -> best-effort with a loud warning;
+    the recipe (strength/gate/sigmas/shifts from the actual loaded files) must
+    always match. Anything unknown keeps backbone-only, with hashes for support.
+    A corrupt fit file never blocks the others."""
     reason = None
     if strength != 1.0 or gate_override is not None or sigmas_override:
         reason = "requires strength=1 and no gate/sigma overrides"
-    elif model.patches or model.object_patches or model.injections:
-        reason = "requires an unmodified checkpoint"
+    elif model.patches or model.injections or any(
+            key != "model_sampling" for key in model.object_patches):
+        reason = ("requires an unmodified checkpoint (only a ModelSampling "
+                  "node may precede ApplyHyperFlow)")
     elif not model.cached_patcher_init:
         reason = "checkpoint source is unavailable"
     else:
@@ -58,16 +66,40 @@ def matching_fit(model, weights, strength, gate_override, sigmas_override):
         else:
             try:
                 base_hash, adapter_hash = file_hash(source), file_hash(weights.path)
-                reason = "no fit matches this checkpoint, adapter and recipe"
+                base_name = Path(source).name
+                base_effort = name_effort = None
                 for path in sorted(FIT_DIRECTORY.glob("*.safetensors")):
-                    data, meta = read_fit(path)
-                    if (meta.get("base_sha256") == base_hash
-                            and meta.get("adapter_sha256") == adapter_hash
-                            and float(meta["strength"]) == strength
+                    try:
+                        data, meta = read_fit(path)
+                    except (OSError, ValueError, TypeError, KeyError,
+                            RuntimeError, SafetensorError):
+                        continue  # unreadable fit must not block the others
+                    if not (float(meta["strength"]) == strength
                             and float(meta["gate"]) == weights.metadata.gate
                             and torch.equal(video_schedule_sigmas(json.loads(meta["sigmas"])),
                                             video_schedule_sigmas(weights.metadata.sigmas))):
+                        continue
+                    base_exact = meta.get("base_sha256") == base_hash
+                    adapter_exact = meta.get("adapter_sha256") == adapter_hash
+                    if base_exact and adapter_exact:
                         return data, meta
+                    if base_exact:
+                        base_effort = base_effort or (data, meta, "adapter")
+                    elif meta.get("base_name") == base_name:
+                        name_effort = name_effort or (
+                            data, meta, "base" if adapter_exact else "base and adapter")
+                for candidate in (base_effort, name_effort):
+                    if candidate is None:
+                        continue
+                    data, meta, what = candidate
+                    _log.warning(
+                        "[hyperflow] curve refit: the %s bytes differ from the "
+                        "fitted checkpoint (mirror/repack?); the recipe matches, "
+                        "so the fit is applied best-effort. Delete it from "
+                        "assets/curve_fits if output looks wrong.", what)
+                    return data, meta
+                reason = (f"no fit matches this checkpoint, adapter and recipe "
+                          f"(base sha256={base_hash}, adapter sha256={adapter_hash})")
             except (OSError, ValueError, TypeError, KeyError, RuntimeError, SafetensorError) as exc:
                 reason = f"fit unavailable ({exc})"
     _log.warning("[hyperflow] curve refit disabled: %s; using backbone only.", reason)

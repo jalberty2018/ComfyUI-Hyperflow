@@ -8,7 +8,10 @@ Each `.safetensors` (~34 KiB) carries 16 fitted `(t, r)` generated rows
 metadata binding it to an exact pruned base checkpoint + adapter file
 (SHA-256), gate 0.25, the trained 8-step sigmas and shifts 12/3, strength 1.0.
 
-Any mismatch falls back to backbone-only behavior with a console warning.
+Matching is tiered: the exact fitted files apply silently; byte-different
+copies of the fitted base or adapter (mirrors, HF downloads) apply best-effort
+with a console warning; unknown checkpoints or a modified MODEL fall back to
+backbone-only behavior, with the file hashes in the log for support.
 
 - `fl2va.safetensors` — for `minimax_h3_fl2va_pruned_int8_convrot.safetensors`
 - `ref2va.safetensors` — for `minimax_h3_ref2va_pruned_int8_convrot.safetensors`

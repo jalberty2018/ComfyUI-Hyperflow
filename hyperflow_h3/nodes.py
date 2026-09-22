@@ -145,7 +145,11 @@ class ApplyHyperFlow:
                         "modules and the per-step (t, r) context."}),
         }, "optional": {
             "experimental_curve_refit": ("BOOLEAN", {"default": False,
-                "tooltip": "Experimental checkpoint-bound conditioning fit. Requires an exact fit, strength 1 and the default gate/sigmas; otherwise uses backbone only."}),
+                "tooltip": "Experimental checkpoint-bound conditioning fit. Exact "
+                           "file match applies silently; byte-different copies of the "
+                           "fitted base/adapter (mirrors, HF downloads) apply "
+                           "best-effort with a warning. Needs strength 1 and the "
+                           "default gate/sigmas; anything unknown uses backbone only."}),
         }}
 
     RETURN_TYPES = ("MODEL", "SIGMAS")
