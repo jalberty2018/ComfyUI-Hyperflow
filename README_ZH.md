@@ -63,10 +63,17 @@ SLA 是另一种不同的稀疏方法——仅建议与针对 SLA 训练的权�
 - 默认网格和 shift 下,`start_percent = 0.16` 保持前两步使用密集注意力;该百分比不是步数比例。
 
 - **基座自动检测**:节点会自动检查加载的模型——完整基座(有 `time_embedder`)或剪枝/曲线基座(无 `time_embedder`)——并强制要求匹配的权重构建,不匹配时会明确报错并指出正确的文件。剪枝基座构建仅应用主干 LoRA,以单时间运行(非官方配方)。
+- **实验性曲线重拟合**(`experimental_curve_refit`,默认关闭):在剪枝/曲线基座上,通过绑定到检查点的条件拟合,在默认配方(strength 1、默认 gate/σ)下恢复大部分双时间 `(t, r)` 信号。在固定种子的 A/B/C 对比测试中,相对完整基座的 latent 余弦相似度从 0.81 → 0.88(FL2VA 视频)、0.93 → 0.99(REF2VA 音频)。拟合文件约 34 KiB,绑定精确基座+适配器哈希;任何不匹配都会回退到仅主干模式并发出警告。新的剪枝检查点需要用 `validation/curve_spike.py` 生成自己的拟合文件。详见 `validation/curve_findings.md`。
 - **量化基座**(int8/融合算子):被基座折叠进融合内核、无法挂钩的 LoRA 目标会被自动检测并改经 merge 路径应用——控制台报告中会列出 `N fused/int8 targets via merge`。
 - **模型采样 shift**:H3 模型默认就是视频 shift 12 / 音频 shift 3。核心 ModelSampling 节点放在 `ApplyHyperFlow` 之后,只有需要非默认 shift 时才必须添加。
 - **aimdo malloc-graph**:在模型编译器会因打过补丁的 MiniMax-H3 前向而崩溃的 Comfy 版本上,本节点仅对自身模型调用禁用编译器。
 - 权重文件是 MiniMax-H3 的模型衍生作品,遵循 [MiniMax H3 社区许可协议](https://huggingface.co/videorebirth/hyperflow);本包代码为 Apache-2.0(schedule/embedder 移植部分衍生自 HyperFlow 与 diffusers 代码,参见上游 `THIRD_PARTY_NOTICES.md`)。
+
+## 更新 ComfyUI 后停在 “Model Initializing”
+
+该状态覆盖整个第一步采样,包括延迟加载权重和合并 LoRA,并不代表一定是编译器卡死。`merge` 减少常驻适配器显存,但合并基座权重仍需要临时内存和计算时间。
+
+相比 v0.36,ComfyUI v0.37 新增了自动检测快速磁盘。若更新后卡住,可用 `--disable-fast-disk` 重启 ComfyUI,重试同一工作流以排查原因。这是诊断步骤,不是已确认的 HyperFlow 修复。若仍卡住,请提供 ComfyUI commit、完整控制台日志、基座及 LoRA 文件名、GPU/显存和系统内存,并说明发生在第一块还是后续块。若日志包含 `[hyperflow] ... applied`,请一并提供。
 
 ## 致谢
 

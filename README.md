@@ -85,10 +85,17 @@ SLA is a different sparse method — use it only with SLA-trained weights.
 - Bypass QKV adapters store the three separate LoRA projections instead of the block-diagonal zero padding, saving 1,092 MiB of adapter tensor storage for the released rank-256 build.
 
 - **Base detection is automatic**: the node inspects the loaded model — full base (has `time_embedder`) or pruned/curve base (no `time_embedder`) — and enforces the matching weights build with a clear error that names the right file. The pruned-base build applies the backbone LoRA only and runs single-time (off-recipe).
+- **Experimental curve refit** (`experimental_curve_refit`, default off): on pruned/curve bases, a checkpoint-bound conditioning fit restores most of the two-time `(t, r)` signal on the default recipe (strength 1, default gate/sigmas). In fixed-seed A/B/C tests against the full base, the refit moved latent cosine similarity from 0.81 → 0.88 (FL2VA video) and 0.93 → 0.99 (REF2VA audio). Fits are ~34 KiB, bound to exact base+adapter hashes; any mismatch falls back to backbone-only with a warning. New pruned checkpoints need their own fit (`validation/curve_spike.py`). See `validation/curve_findings.md`.
 - **Quantized bases** (int8/fused ops): LoRA targets that the base folds into a fused kernel (no hookable module) are detected and applied through the merge path automatically — the console report lists them as `N fused/int8 targets via merge`.
 - **Model sampling shifts**: the H3 model already defaults to video shift 12 / audio shift 3. The core ModelSampling node goes after `ApplyHyperFlow` in the chain, and is only needed if you want non-default shifts.
 - **aimdo malloc-graph**: on Comfy builds whose model compiler crashes on patched MiniMax-H3 forwards, the node disables the compiler for its own model calls.
 - Weights are a Model Derivative of MiniMax-H3 under the [MiniMax H3 Community License](https://huggingface.co/videorebirth/hyperflow); this pack's code is Apache-2.0 (the schedule/embedder ports derive from the HyperFlow and diffusers code, see the upstream `THIRD_PARTY_NOTICES.md`).
+
+## Stuck at “Model Initializing” after a ComfyUI update
+
+That status covers the whole first sampling step, including deferred weight loading and LoRA merging. It does not identify a compiler hang. `merge` reduces resident adapter memory, but still needs temporary memory and time to patch the base weights.
+
+ComfyUI v0.37 introduced automatic fast-disk detection compared with v0.36. To isolate a stall after updating, restart ComfyUI with `--disable-fast-disk` and retry the same workflow. Treat this as a diagnostic, not a confirmed HyperFlow fix. If it still stalls, report the ComfyUI commit, full console log, base/LoRA filenames, GPU/VRAM and system RAM, and whether it happens on the first chunk or a later one. Include the `[hyperflow] ... applied` line if present.
 
 ## Acknowledgements
 
