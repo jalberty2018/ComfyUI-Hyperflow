@@ -57,13 +57,26 @@ HyperFlow 官方验证的 Sol-Attn 配方对应核心 **Model Sparse Attention**
 
 SLA 是另一种不同的稀疏方法——仅建议与针对 SLA 训练的权重配合使用。
 
+### 剪枝/曲线基座——实验性曲线重拟合
+
+剪枝版 MiniMax-H3 基座没有 `time_embedder`,双时间 `(t, r)` 路径无法应用——默认情况下剪枝构建只应用主干 LoRA、以单时间运行(非官方配方)。**实验性曲线重拟合**通过一个绑定到检查点的微型拟合文件(约 34 KB,已内置 `assets/curve_fits/`,覆盖 FL2VA 与 REF2VA 剪枝 int8 检查点——无需下载、不增加任何模型权重)恢复大部分双时间信号。
+
+**剪枝基座推荐设置:**
+
+- 开启 **`experimental_curve_refit`**(两个 Apply 节点上都有;若被隐藏,右键节点 → *显示可选控件*),**`strength` 保持 `1.0`**,gate/σ 覆盖留空——任何偏差或未知检查点都会回退到仅主干模式并在控制台给出警告。
+- `lora_mode` 用 **`bypass`**,最接近参考分支的行为。
+- 采样与完整基座相同:**Euler** + 节点的 **SIGMAS** 输出 + 上方的 Sol-Attn 参数表。
+- 控制台出现 `[hyperflow] curve refit disabled: <原因>` 表示已回退——请检查 strength/覆盖/检查点。
+
+相对完整基座实测(固定提示词/种子/初始潜变量):FL2VA 视频余弦相似度 **0.81 → 0.88**,REF2VA 音频 **0.93 → 0.99**。它恢复了*大部分*而非全部缺失条件;完整基座仍是参照标准。详细数据见 [`validation/curve_findings.md`](validation/curve_findings.md)。新的剪枝检查点需要生成自己的拟合文件(`validation/curve_spike.py`)。
+
 ## 说明
 
 - 旧节点权重的 SwiGLU 行顺序会在加载时自动修正,无需重新下载。新转换文件带有 `hyperflow_fc1_layout=gate_value`,不会重复交换。
 - 默认网格和 shift 下,`start_percent = 0.16` 保持前两步使用密集注意力;该百分比不是步数比例。
 
 - **基座自动检测**:节点会自动检查加载的模型——完整基座(有 `time_embedder`)或剪枝/曲线基座(无 `time_embedder`)——并强制要求匹配的权重构建,不匹配时会明确报错并指出正确的文件。剪枝基座构建仅应用主干 LoRA,以单时间运行(非官方配方)。
-- **实验性曲线重拟合**(`experimental_curve_refit`,默认关闭):在剪枝/曲线基座上,通过绑定到检查点的条件拟合,在默认配方(strength 1、默认 gate/σ)下恢复大部分双时间 `(t, r)` 信号。在固定种子的 A/B/C 对比测试中,相对完整基座的 latent 余弦相似度从 0.81 → 0.88(FL2VA 视频)、0.93 → 0.99(REF2VA 音频)。拟合文件约 34 KiB,绑定精确基座+适配器哈希;任何不匹配都会回退到仅主干模式并发出警告。新的剪枝检查点需要用 `validation/curve_spike.py` 生成自己的拟合文件。详见 `validation/curve_findings.md`。
+- **剪枝/曲线基座的实验性曲线重拟合**:详见上方专门章节。
 - **量化基座**(int8/融合算子):被基座折叠进融合内核、无法挂钩的 LoRA 目标会被自动检测并改经 merge 路径应用——控制台报告中会列出 `N fused/int8 targets via merge`。
 - **模型采样 shift**:H3 模型默认就是视频 shift 12 / 音频 shift 3。核心 ModelSampling 节点放在 `ApplyHyperFlow` 之后,只有需要非默认 shift 时才必须添加。
 - **aimdo malloc-graph**:在模型编译器会因打过补丁的 MiniMax-H3 前向而崩溃的 Comfy 版本上,本节点仅对自身模型调用禁用编译器。

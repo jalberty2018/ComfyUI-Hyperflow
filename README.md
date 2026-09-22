@@ -79,13 +79,26 @@ HyperFlow's validated Sol-Attn recipe maps onto the core **Model Sparse Attentio
 
 SLA is a different sparse method — use it only with SLA-trained weights.
 
+### Pruned / curve bases — experimental curve refit
+
+Pruned MiniMax-H3 bases have no `time_embedder`, so the two-time `(t, r)` pathway cannot apply — by default the pruned build applies the backbone LoRA only and runs single-time (off-recipe). The **experimental curve refit** restores most of the two-time signal through a tiny checkpoint-bound fit (~34 KB, bundled in `assets/curve_fits/` for the FL2VA and REF2VA pruned int8 checkpoints — no download, no extra model weights).
+
+**Recommended settings for pruned:**
+
+- Enable **`experimental_curve_refit`** (widget on both Apply nodes; right-click → *show optional widgets* if hidden), keep **`strength = 1.0`**, and leave gate/sigma overrides empty — any deviation or unknown checkpoint falls back to backbone-only with a console warning.
+- Use **`bypass`** as `lora_mode` for the sharpest match to the reference branches.
+- Same sampling as full bases: **Euler** + the node's **SIGMAS** output + the Sol-Attn table above.
+- Console: `[hyperflow] curve refit disabled: <reason>` means the fallback engaged — check strength/overrides/checkpoint.
+
+Measured against the full base (fixed prompt/seed/latents): FL2VA video cosine **0.81 → 0.88**, REF2VA audio cosine **0.93 → 0.99**. It recovers *most* — not all — of the missing conditioning; the full base remains the reference. Details and per-family numbers: [`validation/curve_findings.md`](validation/curve_findings.md). New pruned checkpoints need their own fit (`validation/curve_spike.py`).
+
 ## Notes
 
 - Existing node weights are corrected on load: the loader swaps legacy Diffusers SwiGLU rows into ComfyUI order. No replacement download is needed. New conversions carry `hyperflow_fc1_layout=gate_value` and are not swapped again.
 - Bypass QKV adapters store the three separate LoRA projections instead of the block-diagonal zero padding, saving 1,092 MiB of adapter tensor storage for the released rank-256 build.
 
 - **Base detection is automatic**: the node inspects the loaded model — full base (has `time_embedder`) or pruned/curve base (no `time_embedder`) — and enforces the matching weights build with a clear error that names the right file. The pruned-base build applies the backbone LoRA only and runs single-time (off-recipe).
-- **Experimental curve refit** (`experimental_curve_refit`, default off): on pruned/curve bases, a checkpoint-bound conditioning fit restores most of the two-time `(t, r)` signal on the default recipe (strength 1, default gate/sigmas). In fixed-seed A/B/C tests against the full base, the refit moved latent cosine similarity from 0.81 → 0.88 (FL2VA video) and 0.93 → 0.99 (REF2VA audio). Fits are ~34 KiB, bound to exact base+adapter hashes; any mismatch falls back to backbone-only with a warning. New pruned checkpoints need their own fit (`validation/curve_spike.py`). See `validation/curve_findings.md`.
+- **Experimental curve refit** for pruned/curve bases: see the dedicated section above.
 - **Quantized bases** (int8/fused ops): LoRA targets that the base folds into a fused kernel (no hookable module) are detected and applied through the merge path automatically — the console report lists them as `N fused/int8 targets via merge`.
 - **Model sampling shifts**: the H3 model already defaults to video shift 12 / audio shift 3. The core ModelSampling node goes after `ApplyHyperFlow` in the chain, and is only needed if you want non-default shifts.
 - **aimdo malloc-graph**: on Comfy builds whose model compiler crashes on patched MiniMax-H3 forwards, the node disables the compiler for its own model calls.
