@@ -71,6 +71,12 @@ SLA is a different sparse method — use it only with SLA-trained weights.
 
 Pruned MiniMax-H3 bases have no `time_embedder`, so the two-time `(t, r)` pathway cannot apply — by default the pruned build applies the backbone LoRA only and runs single-time (off-recipe). The **experimental curve refit** restores most of the two-time signal through a tiny checkpoint-bound fit (~34 KB, bundled in `assets/curve_fits/` for the FL2VA and REF2VA pruned int8 checkpoints — no download, no extra model weights).
 
+
+
+https://github.com/user-attachments/assets/e72c45e3-2cc3-48ce-bb1a-2f0c25e7d602
+
+
+
 **Recommended settings for pruned:**
 
 - Enable **`experimental_curve_refit`** (widget on both Apply nodes; right-click → *show optional widgets* if hidden), keep **`strength = 1.0`**, and leave gate/sigma overrides empty — any deviation or unknown checkpoint falls back to backbone-only with a console warning.
