@@ -2,8 +2,7 @@
 
 [中文文档 (README_ZH)](README_ZH.md)
 
-<img width="1475" height="663" alt="image" src="https://github.com/user-attachments/assets/1a476e02-d108-4184-b850-994c8094a32b" />
-
+<img width="1130" height="476" alt="image" src="https://github.com/user-attachments/assets/327cbbae-a2d7-4f86-b7ec-4dd12b6ce9e9" />
 
 ComfyUI node pack for [HyperFlow](https://github.com/Video-Rebirth/hyperflow) — Video Rebirth's 8-step LoRA for MiniMax-H3 (video + audio), ported onto ComfyUI's native MiniMax-H3 model. No ComfyUI core files are modified; no custom sampler is needed.
 
