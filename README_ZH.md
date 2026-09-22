@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-<img width="1475" height="663" alt="image" src="https://github.com/user-attachments/assets/1a476e02-d108-4184-b850-994c8094a32b" />
+<img width="1130" height="476" alt="image" src="https://github.com/user-attachments/assets/327cbbae-a2d7-4f86-b7ec-4dd12b6ce9e9" />
 
 ComfyUI 节点包,用于运行 [HyperFlow](https://github.com/Video-Rebirth/hyperflow)——Video Rebirth 发布的 MiniMax-H3 视频+音频 8 步 LoRA。本包将其移植到 ComfyUI 原生的 MiniMax-H3 模型上,不修改任何 ComfyUI 核心文件,也**不需要自定义采样器**。
 
