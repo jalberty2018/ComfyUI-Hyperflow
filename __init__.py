@@ -4,10 +4,8 @@ Reference: github.com/Video-Rebirth/hyperflow (Apache-2.0 loader; the LoRA
 weights are a Model Derivative of MiniMax-H3 under the MiniMax H3 Community
 License, huggingface.co/videorebirth/hyperflow).
 
-The diffusers weights file is translated onto ComfyUI's native MiniMax-H3
-module paths in memory at load time -- no converted copy of the file is
-written anywhere. Weights resolve from models/loras/hyperflow/ (registered
-below, the same way the VDN-H3 node registers models/vdn).
+Converted .safetensors weights resolve from models/hyperflow/ and its
+subdirectories, including additional registered model folders.
 """
 
 import os, sys
@@ -19,12 +17,15 @@ import folder_paths
 
 
 def _register_folder():
-    for base in {os.path.dirname(p) for p in folder_paths.get_folder_paths("loras")}:
+    bases = [folder_paths.models_dir]
+    bases.extend(os.path.dirname(p) for p in folder_paths.get_folder_paths("loras"))
+    for base in dict.fromkeys(bases):
         folder_paths.add_model_folder_path("hyperflow", os.path.join(base, "hyperflow"))
+    paths, extensions = folder_paths.folder_names_and_paths["hyperflow"]
+    folder_paths.folder_names_and_paths["hyperflow"] = (paths, set(extensions) | {".safetensors"})
 
 
-if "hyperflow" not in folder_paths.folder_names_and_paths:
-    _register_folder()
+_register_folder()
 
 from hyperflow_h3.nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 

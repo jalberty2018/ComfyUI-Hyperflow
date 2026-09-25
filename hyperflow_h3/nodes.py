@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import logging
 
-import folder_paths
-
 from hyperflow_h3.apply import apply_lora
 from hyperflow_h3.compiler import install_compiler_workaround
 from hyperflow_h3.curve import matching_fit, install_curve_refit
 from hyperflow_h3.embedder import install_two_time
 from hyperflow_h3.schedule import validate_sigmas, video_schedule_sigmas
-from hyperflow_h3.weights import ensure_downloaded, load_weights, resolve_weights
+from hyperflow_h3.weights import (EMPTY_WEIGHTS, available_weights,
+                                  ensure_downloaded, load_weights, resolve_weights)
 
 _log = logging.getLogger("comfy.hyperflow")
 
@@ -102,8 +101,8 @@ def _apply(model, hyperflow_file, strength, lora_mode, verbose,
 
 
 def _file_combo():
-    names = folder_paths.get_filename_list("hyperflow")
-    return names or ["<download the converted HyperFlow .safetensors into models/hyperflow/>"]
+    names = sorted(available_weights())
+    return names or [EMPTY_WEIGHTS]
 
 
 class ApplyHyperFlow:

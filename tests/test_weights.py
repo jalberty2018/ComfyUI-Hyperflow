@@ -142,6 +142,36 @@ def test_resolve_combo_name(tmp_path):
         resolve_weights("nope.safetensors")
 
 
+def test_recursive_discovery_and_stale_placeholder(tmp_path, monkeypatch):
+    import folder_paths
+    from hyperflow_h3.weights import available_weights, EMPTY_WEIGHTS
+    monkeypatch.setattr(folder_paths, "get_folder_paths", lambda name: [str(tmp_path)])
+    monkeypatch.setattr(folder_paths, "get_full_path", lambda *args: None)
+    nested = tmp_path / "nested" / "deeper"
+    nested.mkdir(parents=True)
+    path = nested / "adapter.safetensors"
+    path.touch()
+    (nested / "ignore.txt").touch()
+    relative = str(path.relative_to(tmp_path))
+    assert available_weights() == {relative: path}
+    assert resolve_weights(relative) == path
+    assert resolve_weights("nested/deeper/adapter.safetensors") == path
+    assert resolve_weights("adapter.safetensors") == path
+    assert resolve_weights(EMPTY_WEIGHTS) == path
+    assert resolve_weights(tmp_path) == path
+    second = tmp_path / "adapter.safetensors"
+    second.touch()
+    with pytest.raises(ValueError, match="Multiple HyperFlow"):
+        resolve_weights(EMPTY_WEIGHTS)
+    with pytest.raises(ValueError, match="Multiple HyperFlow"):
+        resolve_weights("adapter.safetensors")
+    second.unlink()
+    path.unlink()
+    assert available_weights() == {}
+    with pytest.raises(FileNotFoundError, match="No .safetensors"):
+        resolve_weights(EMPTY_WEIGHTS)
+
+
 def test_download_on_demand(tmp_path, monkeypatch):
     """download_if_missing fetches exactly the manifest-named file via the HF
     cache; repo id + filename come from fixed allowlists, never free text.

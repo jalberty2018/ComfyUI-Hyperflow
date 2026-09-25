@@ -35,6 +35,23 @@ _ASSETS = Path(__file__).resolve().parent.parent / "assets"
 BUNDLED_MANIFEST_FULL = _ASSETS / MANIFEST_NAME
 BUNDLED_MANIFEST_PRUNED = _ASSETS / "hyperflow_pruned.json"
 BUNDLED_MANIFESTS = (BUNDLED_MANIFEST_FULL, BUNDLED_MANIFEST_PRUNED)
+EMPTY_WEIGHTS = "<download the converted HyperFlow .safetensors into models/hyperflow/>"
+
+
+def _scan_weights(root: Path) -> list[Path]:
+    return sorted(p for p in root.rglob("*")
+                  if p.is_file() and p.suffix.lower() == ".safetensors")
+
+
+def available_weights() -> dict[str, Path]:
+    """Fresh recursive scan; retain registered-folder priority for duplicate names."""
+    import folder_paths
+    found = {}
+    for folder in folder_paths.get_folder_paths("hyperflow"):
+        root = Path(folder)
+        for path in _scan_weights(root):
+            found.setdefault(str(path.relative_to(root)), path)
+    return found
 
 _REQUIRED_METADATA = ("hyperflow", "hyperflow_version", "hyperflow_gate",
                       "lora_alpha", "base_model")
@@ -180,6 +197,15 @@ def resolve_weights(path_or_name: str | os.PathLike) -> Path:
     """Resolve a combo name (models/hyperflow), a path to a .safetensors file,
     or a directory with one weights file, to the weights file itself."""
     name = str(path_or_name)
+    if name == EMPTY_WEIGHTS:
+        found = available_weights()
+        if len(found) > 1:
+            raise ValueError("Multiple HyperFlow .safetensors files found. Select one "
+                             f"in hyperflow_file: {', '.join(sorted(found))}")
+        if found:
+            return next(iter(found.values()))
+        raise FileNotFoundError("No .safetensors files found in models/hyperflow "
+                                "or its registered folders and subdirectories.")
     local = Path(name)
     if not local.is_file() and not local.is_dir():
         import folder_paths  # ComfyUI-only path; the standalone converter passes real paths
@@ -189,15 +215,27 @@ def resolve_weights(path_or_name: str | os.PathLike) -> Path:
             roots = [Path(root) for root in folder_paths.get_folder_paths("hyperflow")]
             if not _within_registered(local, roots):
                 raise ValueError("Model path leaves its registered model directory.")
+        else:
+            found = available_weights()
+            normalized = name.replace("\\", os.sep).replace("/", os.sep)
+            if normalized in found:
+                return found[normalized]
+            if Path(normalized).name == normalized:
+                matches = [p for p in found.values() if p.name == normalized]
+                if len(matches) > 1:
+                    raise ValueError(f"Multiple HyperFlow files named {name!r}; "
+                                     "select a subdirectory path in hyperflow_file.")
+                if matches:
+                    return matches[0]
     if local.is_file():
-        if local.suffix != ".safetensors":
+        if local.suffix.lower() != ".safetensors":
             raise FileNotFoundError(f"{local} is not a .safetensors file.")
         return local
     if local.is_dir():
         for default in _manifest_defaults():
             if (local / default).is_file():
                 return local / default
-        return local / _pick_one(sorted(p.name for p in local.glob("*.safetensors")), str(local))
+        return local / _pick_one([str(p.relative_to(local)) for p in _scan_weights(local)], str(local))
     raise FileNotFoundError(
         f"{name!r} is not a HyperFlow weights file under models/hyperflow "
         "and not a path on disk.")
