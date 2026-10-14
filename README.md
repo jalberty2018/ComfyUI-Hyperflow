@@ -100,6 +100,8 @@ Measured against the full base (fixed prompt/seed/latents): FL2VA video cosine *
 
 ## Stuck at “Model Initializing” after a ComfyUI update
 
+Compatibility checked in **v1.3.2** against ComfyUI `7bf5df9e3` (2026-10-13): **101 tests pass**, including small native CUDA models with bf16 and INT8/convrot weights, bypass/merge, full/pruned/refit conditioning, and unload/reload cycles. No HyperFlow runtime incompatibility was reproduced. This checks integration; a full-size generation was not rerun. [Validation details](validation/comfyui_compatibility_2026-10-14.md).
+
 That status covers the whole first sampling step, including deferred weight loading and LoRA merging. It does not identify a compiler hang. `merge` reduces resident adapter memory, but still needs temporary memory and time to patch the base weights.
 
 ComfyUI v0.37 introduced automatic fast-disk detection compared with v0.36. To isolate a stall after updating, restart ComfyUI with `--disable-fast-disk` and retry the same workflow. Treat this as a diagnostic, not a confirmed HyperFlow fix. If it still stalls, report the ComfyUI commit, full console log, base/LoRA filenames, GPU/VRAM and system RAM, and whether it happens on the first chunk or a later one. Include the `[hyperflow] ... applied` line if present.

@@ -84,6 +84,8 @@ SLA 是另一种不同的稀疏方法——仅建议与针对 SLA 训练的权�
 
 ## 更新 ComfyUI 后停在 “Model Initializing”
 
+**v1.3.2** 已在 ComfyUI `7bf5df9e3`(2026-10-13)上验证:**101 项测试通过**,包含使用 bf16 和 INT8/convrot 权重的小型原生 CUDA 模型、bypass/merge、完整/剪枝/重拟合条件,以及卸载/重新加载循环。未复现 HyperFlow 运行时不兼容。本次验证集成行为,没有重新运行完整规模生成。[验证详情](validation/comfyui_compatibility_2026-10-14.md)。
+
 该状态覆盖整个第一步采样,包括延迟加载权重和合并 LoRA,并不代表一定是编译器卡死。`merge` 减少常驻适配器显存,但合并基座权重仍需要临时内存和计算时间。
 
 相比 v0.36,ComfyUI v0.37 新增了自动检测快速磁盘。若更新后卡住,可用 `--disable-fast-disk` 重启 ComfyUI,重试同一工作流以排查原因。这是诊断步骤,不是已确认的 HyperFlow 修复。若仍卡住,请提供 ComfyUI commit、完整控制台日志、基座及 LoRA 文件名、GPU/显存和系统内存,并说明发生在第一块还是后续块。若日志包含 `[hyperflow] ... applied`,请一并提供。
